@@ -1,20 +1,23 @@
 #
 global:
   topic1:
-  - name: text-hi
+  # The `text_*` pattern is not required, nor is it advised. It's only there
+  # to make an obvious distinction between the name and the language text for
+  # testing purposes
+  - name: text_hi
     en-us: Hi
     fr: Salut
     zh: 你好
-  - name: text-eaten
+  - name: text_eaten
     en-us: Have you eaten?
-    # french is purposefully missing
+    # french is purposefully missing for this test
     zh-tw: 你吃了嗎？
     zh-cn: 你吃了吗？
-  - name: text-apple
+  - name: text_apple
     en-us: An apple
     fr: Une pomme
     zh-cn: 一个苹果
     zh-tw: 一個蘋果
-  - name: text-universal
+  - name: text_universal
     all: There are no languages
 

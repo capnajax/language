@@ -1,6 +1,6 @@
 {
   "name": "@capnajax/language",
-  "version": "0.0.1",
+  "version": "0.9.0",
   "description": "Easy i18n for ES6 ExpressJS applications",
   "main": "language.js",
   "scripts": {

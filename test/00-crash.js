@@ -1,14 +1,14 @@
 'use strict';
 
-import l from '../src/language.js';
+import getLanguageText from '../src/language.js';
 import path from 'path';
 
 describe('Crash test', function() {
 
-  it ('Startup and look up a language without crashing', function () {
+  it ('Startup and look up a language without crashing', async function() {
 
-    l.setLanguageFilename(path.join('test', 'language.yaml'));
-    l('xx-nonexistant-language');
+    getLanguageText.setLanguageFilename(path.join('test', 'language.yaml'));
+    await getLanguageText('xx-nonexistant-language');
 
   });
 
