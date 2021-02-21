@@ -1,0 +1,20 @@
+#
+global:
+  topic1:
+  - name: text-hi
+    en-us: Hi
+    fr: Salut
+    zh: 你好
+  - name: text-eaten
+    en-us: Have you eaten?
+    # french is purposefully missing
+    zh-tw: 你吃了嗎？
+    zh-cn: 你吃了吗？
+  - name: text-apple
+    en-us: An apple
+    fr: Une pomme
+    zh-cn: 一个苹果
+    zh-tw: 一個蘋果
+  - name: text-universal
+    all: There are no languages
+

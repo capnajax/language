@@ -1,0 +1,28 @@
+{
+  "name": "@capnajax/language",
+  "version": "0.0.1",
+  "description": "Easy i18n for ES6 ExpressJS applications",
+  "main": "language.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/capnajax/language.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/capnajax/language/issues"
+  },
+  "homepage": "https://github.com/capnajax/language#readme",
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "yaml": "^1.10.0"
+  },
+  "devDependencies": {
+    "@capnajax/debug": "^1.0.1",
+    "chai": "^4.3.0"
+  }
+}
