@@ -1,5 +1,6 @@
 'use strict';
 
+import { PRIORITY_HIGHEST } from 'constants';
 import { promises as fs } from 'fs';
 import _ from 'lodash';
 import path from 'path';
@@ -14,13 +15,7 @@ let languageFile;
  */
 let languages;
 
-/**
- * Prevent invalid accept language headers from messing up the cache
- * @param {String} acceptLanguage 
- */
-function sanitizeAcceptHeader(acceptLanguage) {
-  return acceptLanguage.replace(/\[\]\./g, '-');
-}
+let maxLanguageCacheSize = 0;
 
 function calculatePreferenceOrder(acceptLanguage) {
 
@@ -53,20 +48,27 @@ function calculatePreferenceOrder(acceptLanguage) {
   return result;
 }
 
-function selectPreferredLanguage(preferenceOrder, languageItem) {
+async function getLanguageText(acceptLanguage) {
 
-  let value;
-  for (let preference of preferenceOrder) {
-    if (_.has(languageItem, preference)) {
-      value = _.get(languageItem, preference);
-      break;
+  acceptLanguage = sanitizeAcceptHeader(acceptLanguage);
+
+  if (!languageFile) {
+    languages = {};
+    try {
+      let readFile = await fs.readFile(languageFilename);
+      languageFile = yaml.parse(readFile.toString());
+    } catch(reason) {
+      throw {message: 'Failed to load language file:', reason};
     }
   }
 
-  return [
-    languageItem.name,
-    value 
-  ];
+  if (_.has(languages, acceptLanguage)) {
+    let languageEntry = languages[acceptLanguage];
+    updatePriorty(acceptLanguage);
+    return languageEntry.text;
+  } else {
+    return processLanguage(acceptLanguage);
+  }
 }
 
 /**
@@ -107,30 +109,57 @@ function processLanguage(acceptLanguage) {
   
   languages[acceptLanguage] = { text: result };
   updatePriorty(acceptLanguage);
+  purgeCache();
+
   return result;
 }
 
-async function getLanguageText(acceptLanguage) {
+function purgeCache() {
+  _.debounce(function purgeCacheImpl() {
+    if (maxLanguageCacheSize > 0 && _.size(languages) > maxLanguageCacheSize) {
+      // identify the order of priority
+      let keyPriorities = _.map(Object.keys(languages), key => { 
+        return {priority: _.get(languages[key], 'priority'), key}; 
+      });
+      // get the keys for the n highest priority accept-languages
+      let keepKeys = _.take(
+        _.map(
+          _.sortBy(keyPriorities, ['priority.accessTime']), 
+          o => { return o.key; }),
+        maxLanguageCacheSize
+      );
+      // discard the lowest priority language files.
+      languages = _.pick(languages, keepKeys);
+    }
+  }, 10);
+}
 
-  acceptLanguage = sanitizeAcceptHeader(acceptLanguage);
+function resetLanguages() {
+  languageFile = undefined;
+}
 
-  if (!languageFile) {
-    languages = {};
-    try {
-      let readFile = await fs.readFile(languageFilename);
-      languageFile = yaml.parse(readFile.toString());
-    } catch(reason) {
-      throw {message: 'Failed to load language file:', reason};
+/**
+ * Prevent invalid accept language headers from messing up the cache
+ * @param {String} acceptLanguage 
+ */
+function sanitizeAcceptHeader(acceptLanguage) {
+  return acceptLanguage.replace(/\[\]\./g, '-');
+}
+
+function selectPreferredLanguage(preferenceOrder, languageItem) {
+
+  let value;
+  for (let preference of preferenceOrder) {
+    if (_.has(languageItem, preference)) {
+      value = _.get(languageItem, preference);
+      break;
     }
   }
 
-  if (_.has(languages, acceptLanguage)) {
-    let languageEntry = languages[acceptLanguage];
-    updatePriorty(acceptLanguage);
-    return languageEntry.text;
-  } else {
-    return processLanguage(acceptLanguage);
-  }
+  return [
+    languageItem.name,
+    value 
+  ];
 }
 
 function setLanguageFilename(filename) {
@@ -138,8 +167,18 @@ function setLanguageFilename(filename) {
   resetLanguages();
 }
 
-function resetLanguages() {
-  languageFile = undefined;
+/**
+ * @method setMaxLanguageCacheSize
+ * Set the largest the language cache should be allowed to grow.
+ * @param {Integer} size maximum number of Accept-Language headers, and
+ *  corresponding calculated language files, to store.
+ */
+function setMaxLanguageCacheSize(size) {
+  if (_.isInteger(size) && size >= 0) {
+    maxLanguageCacheSize = size
+  } else {
+    throw `Invalid argument ${size}`;
+  }
 }
 
 function updatePriorty(acceptLanguage) {
@@ -152,5 +191,6 @@ function updatePriorty(acceptLanguage) {
 
 getLanguageText.reset = resetLanguages;
 getLanguageText.setLanguageFilename = setLanguageFilename;
+getLanguageText.setMaxLanguageCacheSize = setMaxLanguageCacheSize;
 
 export default getLanguageText;
