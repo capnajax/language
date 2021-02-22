@@ -1,10 +1,10 @@
 {
   "name": "@capnajax/language",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "Easy i18n for ES6 ExpressJS applications",
   "main": "language.js",
   "scripts": {
-    "test": "mocha"
+    "test": "TEST_LANGUAGE=true mocha"
   },
   "type": "module",
   "repository": {

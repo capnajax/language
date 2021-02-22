@@ -38,6 +38,12 @@ import getLanguageText from '@capnajax/language'
 
 // optional -- defaults to ${CWD}/language.yaml
 getLanguageText.setLanguageFilename('/path/to.your/langauge.yaml');
+// optional but important -- prevent the language cache from cacheing the
+// translations for more than 50 different accept-language headers.
+getLanguageText.setMaxLanguageCacheSize(50);
+// optional but important -- when a cache is purgeed, purge it to this number
+// of languages. More space between min and max means less-frequent purging.
+getLanguageText.setMinLanguageCacheSize(40);
 
 async function someFunc() {
 
@@ -57,11 +63,11 @@ async function someFunc() {
 
 ## Change History
 
-### 1.0.0 (Next release)
+### 1.0.0 (Current release)
 
 * Periodically purge the calculated language objects cache to prevent it from getting too big over time.
 
-### 0.9.0 (Current Release)
+### 0.9.0 (Previous Release)
 
 First release
 
@@ -69,3 +75,5 @@ First release
 
 * Audit capability, provide a script to test the integrity and completeness of a language file
 * Separate and merge, provide a script to take the language file and separate it into multiple files, one for each language, and another to merge them back together.
+* Identify language headers that would produce the exact same language file so
+more languages can be cached with the same amount of memory and the cache would need less frequent purging

@@ -1,21 +1,35 @@
 'use strict';
 
-import { PRIORITY_HIGHEST } from 'constants';
 import { promises as fs } from 'fs';
 import _ from 'lodash';
 import path from 'path';
 import yaml from 'yaml';
 
-let languageFilename = path.resolve('language.yaml');
+const CACHE_PURGE_TIME = 50;
+const IS_TESTING = !!process.env.TEST_LANGUAGE;
 
+const debugEnabled = (() => {
+  if (_.has(process.env, 'DEBUG')) {
+    if (process.env.DEBUG.match(/@capnajax\/language(,|$)/)) {
+      return true;
+    }
+  }
+  return false;
+})();
+
+let languageFilename = path.resolve('language.yaml');
 let languageFile;
 
 /**
- * So the language text is only calculated once
+ * So the language text is only calculated once for any given Accept-Language
+ * header.
+ * DO NOT SET THIS DIRECTLY or it'll harm unit testing. Use the `setLanguages`
+ * method.
  */
-let languages;
+let _languages;
 
 let maxLanguageCacheSize = 0;
+let minLanguageCacheSize = Number.MAX_SAFE_INTEGER;
 
 function calculatePreferenceOrder(acceptLanguage) {
 
@@ -48,12 +62,26 @@ function calculatePreferenceOrder(acceptLanguage) {
   return result;
 }
 
+function debug(method, ...items) {
+  if (debugEnabled) {
+    if (items.length == 0) {
+      console.log(method);
+    } else if (items.length == 1 && !_.isString(_.first(items))) {
+      console.log(_.first(items));
+    } else {
+      console.log.apply(null, 
+        [`  @capnajax/language [${method}]`]
+          .concat(items));
+    }
+  }
+}
+
 async function getLanguageText(acceptLanguage) {
 
   acceptLanguage = sanitizeAcceptHeader(acceptLanguage);
 
   if (!languageFile) {
-    languages = {};
+    setLanguages({});
     try {
       let readFile = await fs.readFile(languageFilename);
       languageFile = yaml.parse(readFile.toString());
@@ -62,8 +90,8 @@ async function getLanguageText(acceptLanguage) {
     }
   }
 
-  if (_.has(languages, acceptLanguage)) {
-    let languageEntry = languages[acceptLanguage];
+  if (_.has(_languages, acceptLanguage)) {
+    let languageEntry = _languages[acceptLanguage];
     updatePriorty(acceptLanguage);
     return languageEntry.text;
   } else {
@@ -107,32 +135,47 @@ function processLanguage(acceptLanguage) {
     _.set(result, pair[0], pair[1]);
   }
   
-  languages[acceptLanguage] = { text: result };
+  _languages[acceptLanguage] = { text: result };
   updatePriorty(acceptLanguage);
   purgeCache();
 
   return result;
 }
 
-function purgeCache() {
-  _.debounce(function purgeCacheImpl() {
-    if (maxLanguageCacheSize > 0 && _.size(languages) > maxLanguageCacheSize) {
-      // identify the order of priority
-      let keyPriorities = _.map(Object.keys(languages), key => { 
-        return {priority: _.get(languages[key], 'priority'), key}; 
-      });
-      // get the keys for the n highest priority accept-languages
-      let keepKeys = _.take(
+function _purgeCacheImpl() {
+
+  let d = _.partial(debug, 'purgeCacheImpl');
+  debugEnabled && d('called impl, _.size(languages) ==', _.size(_languages));
+
+  if (maxLanguageCacheSize > 0 && _.size(_languages) > maxLanguageCacheSize) {
+    // identify the order of priority
+    let keyPriorities = _.map(Object.keys(_languages), key => { 
+      return {priority: _.get(_languages[key], 'priority'), key}; 
+    });
+
+    // get the keys for the n highest priority accept-languages
+    let keepKeys = _.take(
+      _.reverse(
         _.map(
           _.sortBy(keyPriorities, ['priority.accessTime']), 
-          o => { return o.key; }),
-        maxLanguageCacheSize
-      );
-      // discard the lowest priority language files.
-      languages = _.pick(languages, keepKeys);
-    }
-  }, 10);
+          o => { return o.key; })
+      ),
+      Math.min(minLanguageCacheSize, maxLanguageCacheSize)
+    );
+
+    d('Keeping accept-language headers:');
+    d(keepKeys);
+
+    // discard the lowest priority language files.
+    setLanguages(_.pick(_languages, keepKeys));
+  }
 }
+const purgeCache = _.throttle(
+  _purgeCacheImpl,
+  CACHE_PURGE_TIME,
+  { trailing: true,
+    leading: false
+  });
 
 function resetLanguages() {
   languageFile = undefined;
@@ -167,6 +210,13 @@ function setLanguageFilename(filename) {
   resetLanguages();
 }
 
+function setLanguages(newObj) {
+  _languages = newObj;
+  if (IS_TESTING) {
+    getLanguageText._languages = newObj;
+  }
+}
+
 /**
  * @method setMaxLanguageCacheSize
  * Set the largest the language cache should be allowed to grow.
@@ -181,9 +231,23 @@ function setMaxLanguageCacheSize(size) {
   }
 }
 
+/**
+ * @method setMinLanguageCacheSize
+ * Set the minimum size the language cache should be purged to.
+ * @param {Integer} size minimum number of Accept-Language headers, and
+ *  corresponding calculated language files, to store.
+ */
+function setMinLanguageCacheSize(size) {
+  if (_.isInteger(size) && size >= 0) {
+    maxLanguageCacheSize = size
+  } else {
+    throw `Invalid argument ${size}`;
+  }
+}
+
 function updatePriorty(acceptLanguage) {
-  if (_.has(languages, acceptLanguage)) {
-    let la = languages[acceptLanguage];
+  if (_.has(_languages, acceptLanguage)) {
+    let la = _languages[acceptLanguage];
     _.has(la, 'priority') || (la.priority = {});
     la.priority.accessTime = Date.now();
   }
@@ -192,5 +256,7 @@ function updatePriorty(acceptLanguage) {
 getLanguageText.reset = resetLanguages;
 getLanguageText.setLanguageFilename = setLanguageFilename;
 getLanguageText.setMaxLanguageCacheSize = setMaxLanguageCacheSize;
+getLanguageText.setMinLanguageCacheSize = setMinLanguageCacheSize;
+setLanguages(null);
 
 export default getLanguageText;
